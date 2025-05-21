@@ -6,18 +6,23 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CalendarDays, ChevronLeft, Users, Lock, LogOut, Moon, Sun } from "lucide-react"
+import { CalendarDays, ChevronLeft, Users, Lock, LogOut, Moon, Sun, Plus, RefreshCw } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import { CreateRaidForm } from "@/components/create-raid-form"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface Raid {
   id: string
   title: string
+  description?: string
   date: string
-  time: string
-  participants: number
-  image: string
+  caller_id: string
+  caller_name?: string
+  image_url?: string
+  participants_count?: number
+  raid_helper_id?: string
 }
 
 export default function CallerPage({ params }: { params: { id: string } }) {
@@ -25,9 +30,12 @@ export default function CallerPage({ params }: { params: { id: string } }) {
   const [caller, setCallerData] = useState({ id: params.id, name: params.id })
   const [raids, setRaids] = useState<Raid[]>([])
   const [loading, setLoading] = useState(true)
+  const [syncLoading, setSyncLoading] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState("")
   const [darkMode, setDarkMode] = useState(false)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   useEffect(() => {
     // Verificar preferência de tema
@@ -43,7 +51,7 @@ export default function CallerPage({ params }: { params: { id: string } }) {
     const token = localStorage.getItem(`caller_token_${params.id}`)
     if (token) {
       setIsAuthenticated(true)
-      loadRaidData()
+      loadCallerAndRaids()
     }
   }, [params.id])
 
@@ -65,7 +73,7 @@ export default function CallerPage({ params }: { params: { id: string } }) {
     if (password === "admin123") {
       localStorage.setItem(`caller_token_${params.id}`, "authenticated")
       setIsAuthenticated(true)
-      loadRaidData()
+      loadCallerAndRaids()
     } else {
       alert("Senha incorreta. Tente novamente.")
     }
@@ -76,38 +84,77 @@ export default function CallerPage({ params }: { params: { id: string } }) {
     setIsAuthenticated(false)
   }
 
-  const loadRaidData = () => {
-    // Simulação de chamada à API do Raid Helper
-    setTimeout(() => {
+  const loadCallerAndRaids = async () => {
+    setLoading(true)
+    try {
+      // Carregar raids do caller do Supabase
+      const response = await fetch(`/api/callers/${params.id}/raids`)
+      if (!response.ok) {
+        throw new Error("Erro ao carregar raids")
+      }
+
+      const data = await response.json()
+      setRaids(data.raids || [])
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error)
+      // Fallback para dados simulados em caso de erro
       const mockRaids = [
         {
           id: "raid1",
           title: "Avalonian T8 Dungeon",
-          date: "14/05/2025",
-          time: "20:00",
-          participants: 12,
-          image: "/placeholder.svg?key=fjvwo",
+          date: new Date(Date.now() + 86400000).toISOString(), // Amanhã
+          caller_id: params.id,
+          caller_name: params.id,
+          participants_count: 12,
+          image_url: "/placeholder.svg?key=fjvwo",
         },
         {
           id: "raid2",
           title: "HCE Farm Group",
-          date: "15/05/2025",
-          time: "19:30",
-          participants: 5,
-          image: "/placeholder.svg?key=59j9u",
-        },
-        {
-          id: "raid3",
-          title: "Avalonian Elite Dungeon",
-          date: "16/05/2025",
-          time: "21:00",
-          participants: 20,
-          image: "/placeholder.svg?key=kkgyw",
+          date: new Date(Date.now() + 172800000).toISOString(), // Depois de amanhã
+          caller_id: params.id,
+          caller_name: params.id,
+          participants_count: 5,
+          image_url: "/placeholder.svg?key=59j9u",
         },
       ]
       setRaids(mockRaids)
+    } finally {
       setLoading(false)
-    }, 1000)
+    }
+  }
+
+  const handleRaidCreated = () => {
+    setShowCreateForm(false)
+    loadCallerAndRaids()
+  }
+
+  const syncRaids = async () => {
+    setSyncLoading(true)
+    setSyncMessage(null)
+    try {
+      const response = await fetch("/api/sync-raids")
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao sincronizar raids")
+      }
+
+      setSyncMessage({
+        type: "success",
+        text: data.message || "Raids sincronizadas com sucesso!",
+      })
+
+      loadCallerAndRaids() // Recarregar os dados após a sincronização
+    } catch (error) {
+      console.error("Erro ao sincronizar raids:", error)
+      setSyncMessage({
+        type: "error",
+        text: `Erro ao sincronizar raids: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+      })
+    } finally {
+      setSyncLoading(false)
+    }
   }
 
   const shareRaidIPForm = (raidId: string) => {
@@ -236,12 +283,92 @@ export default function CallerPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
+      <div className="flex justify-end mb-4 gap-2">
+        <Button
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
+        >
+          <Plus className="h-4 w-4 mr-1" />
+          {showCreateForm ? "Cancelar" : "Criar Nova Raid"}
+        </Button>
+        <Button
+          onClick={syncRaids}
+          className="bg-[#0099cc] hover:bg-[#0077aa] dark:bg-blue-700 dark:hover:bg-blue-600"
+          disabled={syncLoading}
+        >
+          {syncLoading ? (
+            <>
+              <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+              Sincronizando...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Sincronizar Raids do Raid Helper
+            </>
+          )}
+        </Button>
+      </div>
+
+      {syncMessage && (
+        <Alert
+          className={`mb-4 ${
+            syncMessage.type === "success"
+              ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
+              : "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800"
+          }`}
+        >
+          <AlertTitle
+            className={
+              syncMessage.type === "success" ? "text-green-800 dark:text-green-400" : "text-red-800 dark:text-red-400"
+            }
+          >
+            {syncMessage.type === "success" ? "Sincronização concluída" : "Erro na sincronização"}
+          </AlertTitle>
+          <AlertDescription
+            className={
+              syncMessage.type === "success" ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"
+            }
+          >
+            {syncMessage.text}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Formulário de criação de raid */}
+      {showCreateForm && (
+        <div className="mb-6">
+          <CreateRaidForm callerId={params.id} onSuccess={handleRaidCreated} />
+        </div>
+      )}
+
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-4 text-[#0099cc] dark:text-blue-400">Suas Raids Ativas</h2>
 
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0099cc] dark:border-blue-500"></div>
+          </div>
+        ) : raids.length === 0 ? (
+          <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-lg border border-[#0099cc]/20 dark:border-blue-900/30">
+            <p className="text-muted-foreground dark:text-gray-400">Você não tem raids ativas no momento.</p>
+            <div className="flex justify-center gap-2 mt-4">
+              <Button
+                onClick={() => setShowCreateForm(true)}
+                className="bg-[#0099cc] hover:bg-[#0077aa] dark:bg-blue-700 dark:hover:bg-blue-600"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Criar Raid Manualmente
+              </Button>
+              <Button
+                onClick={syncRaids}
+                className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
+                disabled={syncLoading}
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Sincronizar do Raid Helper
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -251,20 +378,35 @@ export default function CallerPage({ params }: { params: { id: string } }) {
                 key={raid.id}
               >
                 <div className="w-full h-40 overflow-hidden">
-                  <img src={raid.image || "/placeholder.svg"} alt={raid.title} className="w-full h-full object-cover" />
+                  <img
+                    src={
+                      raid.image_url ||
+                      `/placeholder.svg?height=160&width=320&query=Albion Online Raid ${encodeURIComponent(raid.title) || "/placeholder.svg"}`
+                    }
+                    alt={raid.title}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <CardHeader>
-                  <CardTitle className="text-[#0099cc] dark:text-blue-400">{raid.title}</CardTitle>
+                  <CardTitle className="text-[#0099cc] dark:text-blue-400">
+                    {raid.title}
+                    {raid.raid_helper_id && (
+                      <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded dark:bg-blue-900 dark:text-blue-300">
+                        Raid Helper
+                      </span>
+                    )}
+                  </CardTitle>
                   <CardDescription className="flex items-center gap-1 dark:text-gray-300">
                     <CalendarDays className="h-4 w-4" />
-                    {raid.date} às {raid.time}
+                    {new Date(raid.date).toLocaleDateString("pt-BR")} às{" "}
+                    {new Date(raid.date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center gap-1 text-sm text-muted-foreground dark:text-gray-400">
                       <Users className="h-4 w-4" />
-                      <span>{raid.participants} participantes</span>
+                      <span>{raid.participants_count || 0} participantes</span>
                     </div>
                     <div className="flex gap-2 mt-2">
                       <Button
