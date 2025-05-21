@@ -61,23 +61,20 @@ export default function Home() {
     }
   }
 
-  return (
-    <main className={`container mx-auto py-8 px-4 ${darkMode ? "dark bg-gray-900 text-gray-100" : "bg-[#f0f8ff]"}`}>
-      <div className="flex justify-end mb-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={toggleDarkMode}
-          className="border-[#0099cc]/50 text-[#0099cc] dark:border-blue-700 dark:text-blue-400"
-        >
-          {darkMode ? <Sun className="h-4 w-4 mr-1" /> : <Moon className="h-4 w-4 mr-1" />}
-          {darkMode ? "Modo Claro" : "Modo Escuro"}
-        </Button>
-      </div>
-
-      <div className="flex flex-col items-center mb-8">
-        <div className="w-48 h-48 mb-4">
-          <img src="/lobo-azul-sem-fundo.png" alt="Neve Eterna Logo" className="w-full h-full object-contain" />
-        </div>
-        <h1 className="text-3xl font-bold mb-2 text-[#0099cc] dark:text-blue-400">Sistema de Raids Avalonianas</h1>
-        <p className="text-muted-foreground text-cente
+  return (return (
+  <div className={`container mx-auto py-8 px-4 ${darkMode ? "dark bg-gray-900 text-gray-100" : "bg-[#f0f8ff]"}`}>
+    <div className="flex justify-end mb-4">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={toggleDarkMode}
+        className="border-[#0099cc]/50 text-[#0099cc] dark:border-blue-700 dark:text-blue-400"
+      >
+        {darkMode ? <Sun className="h-4 w-4 mr-1" /> : <Moon className="h-4 w-4 mr-1" />}
+        {darkMode ? "Modo Claro" : "Modo Escuro"}
+      </Button>
+    </div>
+    
+    {/* Resto do seu código */}
+  </div>
+)
