@@ -13,8 +13,23 @@ interface Caller {
   avatar_url: string | null
 }
 
+// Lista de callers padrão
+const defaultCallers: Caller[] = [
+  { discord_id: "BiancaDosVenenos", name: "[CALLER] BiancaDosVenenos", avatar_url: null },
+  { discord_id: "Vasstian", name: "[CALLER] Vasstian", avatar_url: null },
+  { discord_id: "AnyBonita", name: "[CALLER] AnyBonita", avatar_url: null },
+  { discord_id: "VitorGomes", name: "[CALLER] VitorGomes", avatar_url: null },
+  { discord_id: "Juniorgeminha", name: "[CALLER] Juniorgeminha", avatar_url: null },
+  { discord_id: "PerfectTiming", name: "[CALLER] PerfectTiming", avatar_url: null },
+  { discord_id: "Guuzs", name: "[CALLER] Guuzs", avatar_url: null },
+  { discord_id: "Chimpsz", name: "[NE- PVE] Chimpsz", avatar_url: null },
+  { discord_id: "PsychoDemon", name: "![NE] PsychoDemon", avatar_url: null },
+  { discord_id: "SeiyaD", name: "[NE4] SeiyaD", avatar_url: null },
+  { discord_id: "Drkiller", name: "[DOLLY CALLER] Drkiller", avatar_url: null },
+]
+
 export default function Home() {
-  const [callers, setCallers] = useState<Caller[]>([])
+  const [callers, setCallers] = useState<Caller[]>(defaultCallers)
   const [loading, setLoading] = useState(true)
   const [darkMode, setDarkMode] = useState(false)
 
@@ -54,24 +69,13 @@ export default function Home() {
         throw error
       }
 
-      setCallers(data || [])
+      // Se houver dados do banco, use-os; caso contrário, mantenha os callers padrão
+      if (data && data.length > 0) {
+        setCallers(data)
+      }
     } catch (error) {
       console.error("Erro ao carregar callers:", error)
-      // Fallback para dados simulados em caso de erro
-      const mockCallers = [
-        { discord_id: "BiancaDosVenenos", name: "[CALLER] BiancaDosVenenos", avatar_url: null },
-        { discord_id: "Vasstian", name: "[CALLER] Vasstian", avatar_url: null },
-        { discord_id: "AnyBonita", name: "[CALLER] AnyBonita", avatar_url: null },
-        { discord_id: "VitorGomes", name: "[CALLER] VitorGomes", avatar_url: null },
-        { discord_id: "Juniorgeminha", name: "[CALLER] Juniorgeminha", avatar_url: null },
-        { discord_id: "PerfectTiming", name: "[CALLER] PerfectTiming", avatar_url: null },
-        { discord_id: "Guuzs", name: "[CALLER] Guuzs", avatar_url: null },
-        { discord_id: "Chimpsz", name: "[NE- PVE] Chimpsz", avatar_url: null },
-        { discord_id: "PsychoDemon", name: "![NE] PsychoDemon", avatar_url: null },
-        { discord_id: "SeiyaD", name: "[NE4] SeiyaD", avatar_url: null },
-        { discord_id: "Drkiller", name: "[DOLLY CALLER] Drkiller", avatar_url: null },
-      ]
-      setCallers(mockCallers)
+      // Já estamos usando os callers padrão como estado inicial, então não precisamos fazer nada aqui
     } finally {
       setLoading(false)
     }
