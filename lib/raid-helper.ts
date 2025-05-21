@@ -1,3 +1,4 @@
+// lib/raid-helper.ts
 import { supabase } from "./supabase"
 
 // Interface para os eventos do Raid Helper
@@ -21,9 +22,14 @@ export interface RaidHelperEvent {
 }
 
 // Função para buscar eventos do Raid Helper
-export async function fetchRaidHelperEvents(apiKey = "ytwv9b1ocPcdZn6UcS0TA0KRPZSnEZTNGQzM3OFe") {
+export async function fetchRaidHelperEvents(apiKey = "") {
   try {
     console.log("Buscando eventos do Raid Helper...")
+    
+    if (!apiKey) {
+      console.error("Chave de API do Raid Helper não fornecida")
+      throw new Error("Chave de API do Raid Helper não fornecida")
+    }
 
     // Endpoint para buscar eventos atuais
     const response = await fetch("https://raid-helper.dev/api/v2/events/current", {
@@ -35,11 +41,19 @@ export async function fetchRaidHelperEvents(apiKey = "ytwv9b1ocPcdZn6UcS0TA0KRPZ
 
     if (!response.ok) {
       const errorText = await response.text()
+      console.error(`Resposta da API do Raid Helper: ${response.status} ${response.statusText}`)
+      console.error(`Corpo da resposta: ${errorText}`)
       throw new Error(`Erro ao buscar eventos: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const data = await response.json()
-    console.log(`Dados recebidos da API: ${JSON.stringify(data).substring(0, 200)}...`)
+    
+    if (!data || !data.events) {
+      console.warn("API do Raid Helper retornou dados inesperados:", data)
+      return []
+    }
+    
+    console.log(`Recebidos ${data.events.length} eventos da API do Raid Helper`)
     return data.events || []
   } catch (error) {
     console.error("Erro ao buscar eventos do Raid Helper:", error)
@@ -48,119 +62,197 @@ export async function fetchRaidHelperEvents(apiKey = "ytwv9b1ocPcdZn6UcS0TA0KRPZ
 }
 
 // Função para sincronizar eventos do Raid Helper com o Supabase
-export async function syncRaidHelperEvents(apiKey = "ytwv9b1ocPcdZn6UcS0TA0KRPZSnEZTNGQzM3OFe") {
+export async function syncRaidHelperEvents(apiKey = "") {
   try {
     console.log("Iniciando sincronização com o Raid Helper...")
-
-    // Buscar eventos do Raid Helper
-    const events = await fetchRaidHelperEvents(apiKey)
-    console.log(`Encontrados ${events.length} eventos no Raid Helper`)
-
-    // Para cada evento, verificar se já existe no Supabase
-    for (const event of events) {
-      console.log(`Processando evento: ${event.name} (ID: ${event.id})`)
-
-      // Buscar o caller pelo discord_id
-      const { data: callerData } = await supabase
-        .from("callers")
-        .select("id, discord_id")
-        .eq("discord_id", event.leader.id)
-        .maybeSingle()
-
-      // Se o caller não existir, criar um novo
-      let callerId = event.leader.id // Usar o discord_id como padrão
-
-      if (!callerData) {
-        console.log(`Caller ${event.leader.name} não encontrado, criando novo...`)
-        const { data: newCaller, error: callerError } = await supabase
-          .from("callers")
-          .insert({
-            discord_id: event.leader.id,
-            name: event.leader.name,
-            avatar_url: null,
-          })
-          .select("discord_id")
-          .single()
-
-        if (callerError) {
-          console.error(`Erro ao criar caller para ${event.leader.name}:`, callerError)
-          continue
-        }
-
-        callerId = newCaller.discord_id
-        console.log(`Novo caller criado com ID: ${callerId}`)
-      } else {
-        callerId = callerData.discord_id
-        console.log(`Caller encontrado: ${callerId}`)
-      }
-
-      // Verificar se o evento já existe no Supabase
-      const { data: existingRaid } = await supabase
-        .from("raids")
-        .select("id")
-        .eq("raid_helper_id", event.id)
-        .maybeSingle()
-
-      // Preparar a data combinando a data e hora do evento
-      const eventDate = new Date(`${event.date}T${event.time}`)
-
-      if (existingRaid) {
-        console.log(`Raid ${event.name} já existe, atualizando...`)
-        // Atualizar o evento existente
-        const { error: updateError } = await supabase
-          .from("raids")
-          .update({
-            title: event.name,
-            description: event.description || null,
-            date: eventDate.toISOString(),
-            caller_id: callerId,
-            caller_name: event.leader.name,
-            image_url: event.image || null,
-            last_synced: new Date().toISOString(),
-          })
-          .eq("id", existingRaid.id)
-
-        if (updateError) {
-          console.error(`Erro ao atualizar raid ${event.name}:`, updateError)
-        } else {
-          console.log(`Raid ${event.name} atualizada com sucesso`)
-
-          // Sincronizar participantes
-          await syncRaidParticipants(existingRaid.id, event.signups || [])
-        }
-      } else {
-        console.log(`Criando nova raid: ${event.name}`)
-        // Criar um novo evento
-        const { data: newRaid, error: createError } = await supabase
-          .from("raids")
-          .insert({
-            raid_helper_id: event.id,
-            title: event.name,
-            description: event.description || null,
-            date: eventDate.toISOString(),
-            caller_id: callerId,
-            caller_name: event.leader.name,
-            image_url: event.image || null,
-            last_synced: new Date().toISOString(),
-          })
-          .select("id")
-          .single()
-
-        if (createError) {
-          console.error(`Erro ao criar raid ${event.name}:`, createError)
-        } else {
-          console.log(`Raid ${event.name} criada com sucesso com ID: ${newRaid.id}`)
-
-          // Sincronizar participantes
-          await syncRaidParticipants(newRaid.id, event.signups || [])
-        }
+    
+    if (!apiKey) {
+      console.error("Chave de API do Raid Helper não fornecida")
+      return { 
+        success: false, 
+        message: "Chave de API do Raid Helper não fornecida" 
       }
     }
 
-    return { success: true, message: `Sincronização concluída. ${events.length} eventos processados.` }
+    // Verificar conexão com o Supabase
+    try {
+      const { data: testData, error: testError } = await supabase.from("callers").select("count").limit(1)
+      if (testError) {
+        console.error("Erro ao conectar com o Supabase:", testError)
+        return { 
+          success: false, 
+          message: "Erro ao conectar com o banco de dados", 
+          error: testError 
+        }
+      }
+      console.log("Conexão com o Supabase estabelecida com sucesso")
+    } catch (dbError) {
+      console.error("Erro ao testar conexão com o Supabase:", dbError)
+      return { 
+        success: false, 
+        message: "Erro ao conectar com o banco de dados", 
+        error: dbError 
+      }
+    }
+
+    // Buscar eventos do Raid Helper
+    let events = []
+    try {
+      events = await fetchRaidHelperEvents(apiKey)
+      console.log(`Encontrados ${events.length} eventos no Raid Helper`)
+    } catch (fetchError) {
+      console.error("Erro ao buscar eventos do Raid Helper:", fetchError)
+      return { 
+        success: false, 
+        message: "Erro ao buscar eventos do Raid Helper", 
+        error: fetchError 
+      }
+    }
+
+    // Se não houver eventos, retornar sucesso mas sem eventos
+    if (events.length === 0) {
+      return { 
+        success: true, 
+        message: "Nenhum evento encontrado para sincronizar" 
+      }
+    }
+
+    // Para cada evento, verificar se já existe no Supabase
+    let eventsProcessed = 0
+    let eventsCreated = 0
+    let eventsUpdated = 0
+    let errors = []
+
+    for (const event of events) {
+      try {
+        console.log(`Processando evento: ${event.name} (ID: ${event.id})`)
+
+        // Buscar o caller pelo discord_id
+        const { data: callerData, error: callerError } = await supabase
+          .from("callers")
+          .select("id, discord_id")
+          .eq("discord_id", event.leader.id)
+          .maybeSingle()
+
+        // Se o caller não existir, criar um novo
+        let callerId = event.leader.id // Usar o discord_id como padrão
+
+        if (!callerData) {
+          console.log(`Caller ${event.leader.name} não encontrado, criando novo...`)
+          const { data: newCaller, error: callerError } = await supabase
+            .from("callers")
+            .insert({
+              discord_id: event.leader.id,
+              name: event.leader.name,
+              avatar_url: null,
+            })
+            .select("discord_id")
+            .single()
+
+          if (callerError) {
+            console.error(`Erro ao criar caller para ${event.leader.name}:`, callerError)
+            errors.push(`Erro ao criar caller para ${event.leader.name}: ${callerError.message}`)
+            continue
+          }
+
+          callerId = newCaller.discord_id
+          console.log(`Novo caller criado com ID: ${callerId}`)
+        } else {
+          callerId = callerData.discord_id
+          console.log(`Caller encontrado: ${callerId}`)
+        }
+
+        // Verificar se o evento já existe no Supabase
+        const { data: existingRaid } = await supabase
+          .from("raids")
+          .select("id")
+          .eq("raid_helper_id", event.id)
+          .maybeSingle()
+
+        // Preparar a data combinando a data e hora do evento
+        const eventDate = new Date(`${event.date}T${event.time}`)
+
+        if (existingRaid) {
+          console.log(`Raid ${event.name} já existe, atualizando...`)
+          // Atualizar o evento existente
+          const { error: updateError } = await supabase
+            .from("raids")
+            .update({
+              title: event.name,
+              description: event.description || null,
+              date: eventDate.toISOString(),
+              caller_id: callerId,
+              caller_name: event.leader.name,
+              image_url: event.image || null,
+              last_synced: new Date().toISOString(),
+            })
+            .eq("id", existingRaid.id)
+
+          if (updateError) {
+            console.error(`Erro ao atualizar raid ${event.name}:`, updateError)
+            errors.push(`Erro ao atualizar raid ${event.name}: ${updateError.message}`)
+          } else {
+            console.log(`Raid ${event.name} atualizada com sucesso`)
+            eventsUpdated++
+
+            // Sincronizar participantes
+            await syncRaidParticipants(existingRaid.id, event.signups || [])
+          }
+        } else {
+          console.log(`Criando nova raid: ${event.name}`)
+          // Criar um novo evento
+          const { data: newRaid, error: createError } = await supabase
+            .from("raids")
+            .insert({
+              raid_helper_id: event.id,
+              title: event.name,
+              description: event.description || null,
+              date: eventDate.toISOString(),
+              caller_id: callerId,
+              caller_name: event.leader.name,
+              image_url: event.image || null,
+              last_synced: new Date().toISOString(),
+            })
+            .select("id")
+            .single()
+
+          if (createError) {
+            console.error(`Erro ao criar raid ${event.name}:`, createError)
+            errors.push(`Erro ao criar raid ${event.name}: ${createError.message}`)
+          } else {
+            console.log(`Raid ${event.name} criada com sucesso com ID: ${newRaid.id}`)
+            eventsCreated++
+
+            // Sincronizar participantes
+            await syncRaidParticipants(newRaid.id, event.signups || [])
+          }
+        }
+
+        eventsProcessed++
+      } catch (eventError) {
+        console.error(`Erro ao processar evento ${event.name}:`, eventError)
+        errors.push(`Erro ao processar evento ${event.name}: ${eventError instanceof Error ? eventError.message : String(eventError)}`)
+      }
+    }
+
+    const resultMessage = `Sincronização concluída. ${eventsProcessed} eventos processados. ${eventsCreated} criados, ${eventsUpdated} atualizados.`
+    
+    if (errors.length > 0) {
+      return { 
+        success: true, 
+        message: resultMessage, 
+        warnings: errors 
+      }
+    }
+
+    return { success: true, message: resultMessage }
   } catch (error) {
     console.error("Erro na sincronização de eventos:", error)
-    return { success: false, message: "Erro na sincronização", error }
+    return { 
+      success: false, 
+      message: "Erro na sincronização", 
+      error: error instanceof Error ? error.message : String(error) 
+    }
   }
 }
 
