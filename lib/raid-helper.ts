@@ -36,6 +36,9 @@ export async function fetchRaidHelperEvents(apiKey = "") {
     // ID do servidor Discord
     const SERVER_ID = process.env.DISCORD_ID || "1313368815635009537"
     
+    // Usar a chave API da variável de ambiente
+    apiKey = process.env.RAID_HELPER_API_KEY || ""
+    
     if (!apiKey) {
       console.error("Chave de API do Raid Helper não fornecida")
       throw new Error("Chave de API do Raid Helper não fornecida")
@@ -121,6 +124,9 @@ export async function fetchRaidHelperEvents(apiKey = "") {
 export async function syncRaidHelperEvents(apiKey = "") {
   try {
     console.log("=== INICIANDO SINCRONIZAÇÃO ===")
+    
+    // Usar a chave API da variável de ambiente
+    apiKey = process.env.RAID_HELPER_API_KEY || ""
     
     if (!apiKey) {
       console.error("Chave de API do Raid Helper não fornecida")
@@ -440,8 +446,10 @@ function mapRaidHelperRoleToAlbion(className?: string, spec?: string): string {
   const lowerClass = (className || "").toLowerCase()
   const lowerSpec = (spec || "").toLowerCase()
 
-  if (lowerClass.includes("tank") || lowerSpec.includes("heal")) {
+  if (lowerClass.includes("tank") || lowerSpec.includes("tank")) {
     return "Off Tank"
+  } else if (lowerClass.includes("heal") || lowerSpec.includes("heal")) {
+    return "Healer"
   } else if (lowerClass.includes("arcane") || lowerSpec.includes("arcane")) {
     return "Elevado"
   } else if (lowerClass.includes("silence") || lowerSpec.includes("silence")) {
