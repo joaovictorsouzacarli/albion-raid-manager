@@ -31,7 +31,7 @@ export interface RaidHelperEvent {
 // Função para buscar eventos do Raid Helper usando a API v3
 export async function fetchRaidHelperEvents(apiKey = "") {
   try {
-    console.log("=== INICIANDO BUSCA DE EVENTOS DO RAID HELPER ===")
+    console.log("Buscando eventos do Raid Helper usando a API v3...")
     
     // ID do servidor Discord
     const SERVER_ID = process.env.DISCORD_ID || "1313368815635009537"
@@ -48,11 +48,17 @@ export async function fetchRaidHelperEvents(apiKey = "") {
     const url = `https://raid-helper.dev/api/v3/servers/${SERVER_ID}/events`
     console.log(`URL da requisição: ${url}`)
 
+    const headers = {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "User-Agent": "AlbionRaidManager/1.0" // Adicionar User-Agent
+    }
+
+    console.log("Headers da requisição:", headers)
+
     const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      method: 'GET',
+      headers: headers
     })
 
     console.log(`Status da resposta: ${response.status} ${response.statusText}`)
@@ -70,6 +76,12 @@ export async function fetchRaidHelperEvents(apiKey = "") {
     console.log("=== JSON COMPLETO RETORNADO PELA API ===")
     console.log(JSON.stringify(data, null, 2))
     console.log("=== FIM DO JSON ===")
+    
+    // Verificar se a resposta contém um erro
+    if (data.error) {
+      console.error("API retornou um erro:", data.error)
+      throw new Error(`API retornou um erro: ${data.error}`)
+    }
     
     // A estrutura da resposta na v3 pode ter os eventos em diferentes campos
     const events = data.postedEvents || data.events || []
