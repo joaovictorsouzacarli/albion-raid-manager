@@ -6,16 +6,23 @@ export interface RaidHelperEvent {
   id: string
   name: string
   description?: string
-  leader: {
+  leaderId?: string
+  author?: {
     id: string
     name: string
   }
-  date: string // ISO string
+  leader?: {
+    id: string
+    name: string
+  }
+  date: string
   time: string
+  timestamp?: number
   image?: string
   signups?: Array<{
     id: string
     name: string
+    username?: string
     class?: string
     spec?: string
   }>
@@ -24,7 +31,7 @@ export interface RaidHelperEvent {
 // Função para buscar eventos do Raid Helper usando a API v3
 export async function fetchRaidHelperEvents(apiKey = "") {
   try {
-    console.log("Buscando eventos do Raid Helper usando a API v3...")
+    console.log("=== INICIANDO BUSCA DE EVENTOS DO RAID HELPER ===")
     
     // ID do servidor Discord
     const SERVER_ID = process.env.DISCORD_ID || "1313368815635009537"
@@ -35,31 +42,61 @@ export async function fetchRaidHelperEvents(apiKey = "") {
     }
 
     console.log(`Usando SERVER_ID: ${SERVER_ID}`)
+    console.log(`Usando API Key: ${apiKey ? "Configurada" : "Não configurada"}`)
 
     // Endpoint correto da API v3
-    const response = await fetch(`https://raid-helper.dev/api/v3/servers/${SERVER_ID}/events`, {
+    const url = `https://raid-helper.dev/api/v3/servers/${SERVER_ID}/events`
+    console.log(`URL da requisição: ${url}`)
+
+    const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
     })
 
+    console.log(`Status da resposta: ${response.status} ${response.statusText}`)
+
     if (!response.ok) {
       const errorText = await response.text()
-      console.error(`Resposta da API do Raid Helper: ${response.status} ${response.statusText}`)
+      console.error(`Erro na resposta da API:`)
+      console.error(`Status: ${response.status} ${response.statusText}`)
       console.error(`Corpo da resposta: ${errorText}`)
       throw new Error(`Erro ao buscar eventos: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const data = await response.json()
     
-    // A estrutura da resposta na v3 tem os eventos em postedEvents
-    const events = data.postedEvents || []
+    console.log("=== JSON COMPLETO RETORNADO PELA API ===")
+    console.log(JSON.stringify(data, null, 2))
+    console.log("=== FIM DO JSON ===")
     
-    console.log(`Recebidos ${events.length} eventos da API do Raid Helper`)
+    // A estrutura da resposta na v3 pode ter os eventos em diferentes campos
+    const events = data.postedEvents || data.events || []
+    
+    console.log(`Número de eventos encontrados: ${events.length}`)
+    
+    if (events.length > 0) {
+      console.log("=== DETALHES DOS EVENTOS ENCONTRADOS ===")
+      events.forEach((event, index) => {
+        console.log(`--- Evento ${index + 1} ---`)
+        console.log(`ID do evento: ${event.id}`)
+        console.log(`Nome: ${event.name}`)
+        console.log(`Leader ID: ${event.leaderId}`)
+        console.log(`Author ID: ${event.author?.id}`)
+        console.log(`Leader objeto: ${JSON.stringify(event.leader)}`)
+        console.log(`Author objeto: ${JSON.stringify(event.author)}`)
+        console.log(`Evento completo: ${JSON.stringify(event, null, 2)}`)
+        console.log("--- Fim do Evento ---")
+      })
+      console.log("=== FIM DOS DETALHES DOS EVENTOS ===")
+    }
+    
     return events
   } catch (error) {
-    console.error("Erro ao buscar eventos do Raid Helper:", error)
+    console.error("=== ERRO AO BUSCAR EVENTOS ===")
+    console.error("Erro:", error)
+    console.error("=== FIM DO ERRO ===")
     throw error
   }
 }
@@ -67,7 +104,7 @@ export async function fetchRaidHelperEvents(apiKey = "") {
 // Função para sincronizar eventos do Raid Helper com o Supabase
 export async function syncRaidHelperEvents(apiKey = "") {
   try {
-    console.log("Iniciando sincronização com o Raid Helper...")
+    console.log("=== INICIANDO SINCRONIZAÇÃO ===")
     
     if (!apiKey) {
       console.error("Chave de API do Raid Helper não fornecida")
@@ -120,6 +157,26 @@ export async function syncRaidHelperEvents(apiKey = "") {
       }
     }
 
+    // Buscar todos os callers do banco para comparação
+    const { data: allCallers, error: callersError } = await supabase
+      .from("callers")
+      .select("discord_id, name")
+
+    if (callersError) {
+      console.error("Erro ao buscar callers:", callersError)
+      return { 
+        success: false, 
+        message: "Erro ao buscar callers do banco de dados", 
+        error: callersError 
+      }
+    }
+
+    console.log("=== CALLERS NO BANCO DE DADOS ===")
+    allCallers?.forEach(caller => {
+      console.log(`Caller: ${caller.name} | Discord ID: ${caller.discord_id}`)
+    })
+    console.log("=== FIM DOS CALLERS ===")
+
     // Para cada evento, verificar se já existe no Supabase
     let eventsProcessed = 0
     let eventsCreated = 0
@@ -128,21 +185,43 @@ export async function syncRaidHelperEvents(apiKey = "") {
 
     for (const event of events) {
       try {
-        console.log(`Processando evento: ${event.name} (ID: ${event.id})`)
+        console.log(`=== PROCESSANDO EVENTO: ${event.name} ===`)
+        console.log(`ID do evento: ${event.id}`)
 
-        // Na API v3, a estrutura pode ser diferente
-        const leaderId = event.leader?.id || event.author?.id || "unknown"
-        const leaderName = event.leader?.name || event.author?.name || "Caller Desconhecido"
+        // Extrair o leaderId de diferentes possíveis campos
+        const leaderId = event.leaderId || event.author?.id || event.leader?.id || "unknown"
+        const leaderName = event.author?.name || event.leader?.name || "Caller Desconhecido"
+
+        console.log(`Leader ID extraído: ${leaderId}`)
+        console.log(`Leader Name extraído: ${leaderName}`)
 
         // Buscar o caller pelo discord_id
+        console.log(`Buscando caller com discord_id: ${leaderId}`)
+        
         const { data: callerData, error: callerError } = await supabase
           .from("callers")
-          .select("id, discord_id")
+          .select("id, discord_id, name")
           .eq("discord_id", leaderId)
           .maybeSingle()
 
+        console.log(`Resultado da busca do caller:`)
+        console.log(`Caller encontrado: ${callerData ? "SIM" : "NÃO"}`)
+        if (callerData) {
+          console.log(`Caller do banco - ID: ${callerData.id}, Discord ID: ${callerData.discord_id}, Nome: ${callerData.name}`)
+        }
+
+        // Comparação visual dos IDs
+        console.log("=== COMPARAÇÃO DE IDs ===")
+        console.log(`ID do evento (leaderId): "${leaderId}"`)
+        console.log(`IDs no banco:`)
+        allCallers?.forEach(caller => {
+          const match = caller.discord_id === leaderId
+          console.log(`  "${caller.discord_id}" (${caller.name}) - Match: ${match ? "✓" : "✗"}`)
+        })
+        console.log("=== FIM DA COMPARAÇÃO ===")
+
         // Se o caller não existir, criar um novo
-        let callerId = leaderId // Usar o discord_id como padrão
+        let callerId = leaderId
 
         if (!callerData) {
           console.log(`Caller ${leaderName} não encontrado, criando novo...`)
@@ -177,7 +256,6 @@ export async function syncRaidHelperEvents(apiKey = "") {
           .maybeSingle()
 
         // Preparar a data combinando a data e hora do evento
-        // Na API v3, o formato pode ser diferente
         let eventDate
         if (event.date && event.time) {
           eventDate = new Date(`${event.date}T${event.time}`)
@@ -186,6 +264,8 @@ export async function syncRaidHelperEvents(apiKey = "") {
         } else {
           eventDate = new Date() // Fallback para data atual
         }
+
+        console.log(`Data do evento: ${eventDate.toISOString()}`)
 
         if (existingRaid) {
           console.log(`Raid ${event.name} já existe, atualizando...`)
@@ -244,6 +324,7 @@ export async function syncRaidHelperEvents(apiKey = "") {
         }
 
         eventsProcessed++
+        console.log(`=== FIM DO PROCESSAMENTO DO EVENTO: ${event.name} ===`)
       } catch (eventError) {
         console.error(`Erro ao processar evento ${event.name}:`, eventError)
         errors.push(`Erro ao processar evento ${event.name}: ${eventError instanceof Error ? eventError.message : String(eventError)}`)
@@ -251,6 +332,14 @@ export async function syncRaidHelperEvents(apiKey = "") {
     }
 
     const resultMessage = `Sincronização concluída. ${eventsProcessed} eventos processados. ${eventsCreated} criados, ${eventsUpdated} atualizados.`
+    
+    console.log("=== RESULTADO DA SINCRONIZAÇÃO ===")
+    console.log(resultMessage)
+    if (errors.length > 0) {
+      console.log("Erros encontrados:")
+      errors.forEach(error => console.log(`- ${error}`))
+    }
+    console.log("=== FIM DA SINCRONIZAÇÃO ===")
     
     if (errors.length > 0) {
       return { 
@@ -262,7 +351,9 @@ export async function syncRaidHelperEvents(apiKey = "") {
 
     return { success: true, message: resultMessage }
   } catch (error) {
-    console.error("Erro na sincronização de eventos:", error)
+    console.error("=== ERRO GERAL NA SINCRONIZAÇÃO ===")
+    console.error("Erro:", error)
+    console.error("=== FIM DO ERRO GERAL ===")
     return { 
       success: false, 
       message: "Erro na sincronização", 
@@ -274,7 +365,9 @@ export async function syncRaidHelperEvents(apiKey = "") {
 // Função para sincronizar participantes de uma raid
 async function syncRaidParticipants(raidId: string, signups: any[] = []) {
   try {
-    console.log(`Sincronizando ${signups.length} participantes para a raid ${raidId}`)
+    console.log(`=== SINCRONIZANDO PARTICIPANTES ===`)
+    console.log(`Raid ID: ${raidId}`)
+    console.log(`Número de participantes: ${signups.length}`)
 
     // Primeiro, remover todos os participantes existentes
     const { error: deleteError } = await supabase.from("players").delete().eq("raid_id", raidId)
@@ -289,6 +382,12 @@ async function syncRaidParticipants(raidId: string, signups: any[] = []) {
       console.log(`Nenhum participante para sincronizar na raid ${raidId}`)
       return
     }
+
+    // Log dos participantes
+    console.log("Participantes encontrados:")
+    signups.forEach((signup, index) => {
+      console.log(`${index + 1}. ${signup.name || signup.username || "Nome não encontrado"} - ${signup.class || "Classe não definida"}`)
+    })
 
     // Preparar os dados dos jogadores para inserção em massa
     const playersToInsert = signups.map((signup) => ({
@@ -310,6 +409,8 @@ async function syncRaidParticipants(raidId: string, signups: any[] = []) {
     } else {
       console.log(`${signups.length} participantes sincronizados com sucesso para a raid ${raidId}`)
     }
+    
+    console.log(`=== FIM DA SINCRONIZAÇÃO DE PARTICIPANTES ===`)
   } catch (error) {
     console.error("Erro ao sincronizar participantes:", error)
   }
