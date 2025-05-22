@@ -1,4 +1,3 @@
-// app/api/sync-raids/route.ts
 import { NextResponse } from "next/server"
 import { syncRaidHelperEvents } from "@/lib/raid-helper"
 
@@ -10,7 +9,7 @@ export async function GET(request: Request) {
     const apiKey = process.env.RAID_HELPER_API_KEY || ""
     
     if (!apiKey) {
-      console.error("Chave de API do Raid Helper não configurada")
+      console.error("Chave de API do Raid Helper não fornecida")
       return NextResponse.json({ 
         error: "Chave de API do Raid Helper não configurada. Configure a variável de ambiente RAID_HELPER_API_KEY." 
       }, { status: 400 })

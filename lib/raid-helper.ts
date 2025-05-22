@@ -1,121 +1,52 @@
-// lib/raid-helper.ts
 import { supabase } from "./supabase"
 
-// Interface para os eventos do Raid Helper v3
+// Interface para os eventos do Raid Helper
 export interface RaidHelperEvent {
   id: string
   name: string
   description?: string
-  leaderId?: string
-  author?: {
+  leader: {
     id: string
     name: string
   }
-  leader?: {
-    id: string
-    name: string
-  }
-  date: string
+  date: string // ISO string
   time: string
-  timestamp?: number
   image?: string
-  signups?: Array<{
+  signups: Array<{
     id: string
     name: string
-    username?: string
     class?: string
     spec?: string
   }>
 }
 
-// Função para buscar eventos do Raid Helper usando a API v3
+// Função para buscar eventos do Raid Helper
 export async function fetchRaidHelperEvents(apiKey = "") {
   try {
-    console.log("Buscando eventos do Raid Helper usando a API v3...")
-    
-    // ID do servidor Discord
-    const SERVER_ID = process.env.DISCORD_ID || "1313368815635009537"
-    
-    // Usar a chave API da variável de ambiente
-    apiKey = process.env.RAID_HELPER_API_KEY || ""
+    console.log("Buscando eventos do Raid Helper...")
     
     if (!apiKey) {
-      console.error("Chave de API do Raid Helper não fornecida")
       throw new Error("Chave de API do Raid Helper não fornecida")
     }
 
-    console.log(`Usando SERVER_ID: ${SERVER_ID}`)
-    console.log(`Usando API Key: ${apiKey ? "Configurada" : "Não configurada"}`)
-
-    // Endpoint correto da API v3
-    const url = `https://raid-helper.dev/api/v3/servers/${SERVER_ID}/events`
-    console.log(`URL da requisição: ${url}`)
-
-    const headers = {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "User-Agent": "AlbionRaidManager/1.0" // Adicionar User-Agent
-    }
-
-    console.log("Headers da requisição:", JSON.stringify(headers))
-
-    const requestOptions = {
-      method: 'GET',
-      headers: headers
-    }
-
-    console.log("Opções da requisição:", JSON.stringify(requestOptions))
-
-    const response = await fetch(url, requestOptions)
-
-    console.log(`Status da resposta: ${response.status} ${response.statusText}`)
+    // Endpoint para buscar eventos atuais
+    const response = await fetch("https://raid-helper.dev/api/v2/events/current", {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+    })
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error(`Erro na resposta da API:`)
-      console.error(`Status: ${response.status} ${response.statusText}`)
-      console.error(`Corpo da resposta: ${errorText}`)
       throw new Error(`Erro ao buscar eventos: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const data = await response.json()
-    
-    console.log("=== JSON COMPLETO RETORNADO PELA API ===")
-    console.log(JSON.stringify(data, null, 2))
-    console.log("=== FIM DO JSON ===")
-    
-    // Verificar se a resposta contém um erro
-    if (data.error) {
-      console.error("API retornou um erro:", data.error)
-      throw new Error(`API retornou um erro: ${data.error}`)
-    }
-    
-    // A estrutura da resposta na v3 pode ter os eventos em diferentes campos
-    const events = data.postedEvents || data.events || []
-    
-    console.log(`Número de eventos encontrados: ${events.length}`)
-    
-    if (events.length > 0) {
-      console.log("=== DETALHES DOS EVENTOS ENCONTRADOS ===")
-      events.forEach((event, index) => {
-        console.log(`--- Evento ${index + 1} ---`)
-        console.log(`ID do evento: ${event.id}`)
-        console.log(`Nome: ${event.name}`)
-        console.log(`Leader ID: ${event.leaderId}`)
-        console.log(`Author ID: ${event.author?.id}`)
-        console.log(`Leader objeto: ${JSON.stringify(event.leader)}`)
-        console.log(`Author objeto: ${JSON.stringify(event.author)}`)
-        console.log(`Evento completo: ${JSON.stringify(event, null, 2)}`)
-        console.log("--- Fim do Evento ---")
-      })
-      console.log("=== FIM DOS DETALHES DOS EVENTOS ===")
-    }
-    
-    return events
+    console.log(`Dados recebidos da API: ${JSON.stringify(data).substring(0, 200)}...`)
+    return data.events || []
   } catch (error) {
-    console.error("=== ERRO AO BUSCAR EVENTOS ===")
-    console.error("Erro:", error)
-    console.error("=== FIM DO ERRO ===")
+    console.error("Erro ao buscar eventos do Raid Helper:", error)
     throw error
   }
 }
@@ -124,9 +55,6 @@ export async function fetchRaidHelperEvents(apiKey = "") {
 export async function syncRaidHelperEvents(apiKey = "") {
   try {
     console.log("=== INICIANDO SINCRONIZAÇÃO ===")
-    
-    // Usar a chave API da variável de ambiente
-    apiKey = process.env.RAID_HELPER_API_KEY || ""
     
     if (!apiKey) {
       console.error("Chave de API do Raid Helper não fornecida")
@@ -179,26 +107,6 @@ export async function syncRaidHelperEvents(apiKey = "") {
       }
     }
 
-    // Buscar todos os callers do banco para comparação
-    const { data: allCallers, error: callersError } = await supabase
-      .from("callers")
-      .select("discord_id, name")
-
-    if (callersError) {
-      console.error("Erro ao buscar callers:", callersError)
-      return { 
-        success: false, 
-        message: "Erro ao buscar callers do banco de dados", 
-        error: callersError 
-      }
-    }
-
-    console.log("=== CALLERS NO BANCO DE DADOS ===")
-    allCallers?.forEach(caller => {
-      console.log(`Caller: ${caller.name} | Discord ID: ${caller.discord_id}`)
-    })
-    console.log("=== FIM DOS CALLERS ===")
-
     // Para cada evento, verificar se já existe no Supabase
     let eventsProcessed = 0
     let eventsCreated = 0
@@ -211,8 +119,8 @@ export async function syncRaidHelperEvents(apiKey = "") {
         console.log(`ID do evento: ${event.id}`)
 
         // Extrair o leaderId de diferentes possíveis campos
-        const leaderId = event.leaderId || event.author?.id || event.leader?.id || "unknown"
-        const leaderName = event.author?.name || event.leader?.name || "Caller Desconhecido"
+        const leaderId = event.leader?.id || event.author?.id || "unknown"
+        const leaderName = event.leader?.name || event.author?.name || "Caller Desconhecido"
 
         console.log(`Leader ID extraído: ${leaderId}`)
         console.log(`Leader Name extraído: ${leaderName}`)
@@ -231,16 +139,6 @@ export async function syncRaidHelperEvents(apiKey = "") {
         if (callerData) {
           console.log(`Caller do banco - ID: ${callerData.id}, Discord ID: ${callerData.discord_id}, Nome: ${callerData.name}`)
         }
-
-        // Comparação visual dos IDs
-        console.log("=== COMPARAÇÃO DE IDs ===")
-        console.log(`ID do evento (leaderId): "${leaderId}"`)
-        console.log(`IDs no banco:`)
-        allCallers?.forEach(caller => {
-          const match = caller.discord_id === leaderId
-          console.log(`  "${caller.discord_id}" (${caller.name}) - Match: ${match ? "✓" : "✗"}`)
-        })
-        console.log("=== FIM DA COMPARAÇÃO ===")
 
         // Se o caller não existir, criar um novo
         let callerId = leaderId
@@ -491,7 +389,7 @@ export async function createRaid(params: CreateRaidParams) {
     // Verificar se o caller existe
     const { data: callerData } = await supabase
       .from("callers")
-      .select("discord_id")
+      .select("discord_id, name")
       .eq("discord_id", params.callerId)
       .maybeSingle()
 
@@ -507,7 +405,7 @@ export async function createRaid(params: CreateRaidParams) {
         description: params.description || null,
         date: params.date.toISOString(),
         caller_id: params.callerId,
-        caller_name: params.callerId, // Pode ser atualizado depois
+        caller_name: callerData.name || params.callerId, // Usar o nome do caller do banco
         image_url: params.imageUrl || null,
       })
       .select("id")
