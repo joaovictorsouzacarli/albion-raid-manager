@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       }, { status: 400 })
     }
 
-    console.log("Chamando função de sincronização com a chave API e ID do Discord")
+    console.log("Chamando função de sincronização com a chave API")
     const result = await syncRaidHelperEvents(apiKey)
 
     if (result.success) {
