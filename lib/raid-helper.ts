@@ -54,12 +54,16 @@ export async function fetchRaidHelperEvents(apiKey = "") {
       "User-Agent": "AlbionRaidManager/1.0" // Adicionar User-Agent
     }
 
-    console.log("Headers da requisição:", headers)
+    console.log("Headers da requisição:", JSON.stringify(headers))
 
-    const response = await fetch(url, {
+    const requestOptions = {
       method: 'GET',
       headers: headers
-    })
+    }
+
+    console.log("Opções da requisição:", JSON.stringify(requestOptions))
+
+    const response = await fetch(url, requestOptions)
 
     console.log(`Status da resposta: ${response.status} ${response.statusText}`)
 
@@ -436,10 +440,8 @@ function mapRaidHelperRoleToAlbion(className?: string, spec?: string): string {
   const lowerClass = (className || "").toLowerCase()
   const lowerSpec = (spec || "").toLowerCase()
 
-  if (lowerClass.includes("tank") || lowerSpec.includes("tank")) {
+  if (lowerClass.includes("tank") || lowerSpec.includes("heal")) {
     return "Off Tank"
-  } else if (lowerClass.includes("heal") || lowerSpec.includes("heal")) {
-    return "Healer"
   } else if (lowerClass.includes("arcane") || lowerSpec.includes("arcane")) {
     return "Elevado"
   } else if (lowerClass.includes("silence") || lowerSpec.includes("silence")) {
