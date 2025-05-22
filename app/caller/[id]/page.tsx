@@ -447,3 +447,20 @@ export default function CallerPage({ params }: { params: { id: string } }) {
     </main>
   )
 }
+<Button
+  onClick={syncRaids}
+  className="bg-[#0099cc] hover:bg-[#0077aa] dark:bg-blue-700 dark:hover:bg-blue-600"
+  disabled={syncLoading}
+>
+  {syncLoading ? (
+    <>
+      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+      Sincronizando...
+    </>
+  ) : (
+    <>
+      <RefreshCw className="h-4 w-4 mr-1" />
+      Sincronizar Raids do Discord
+    </>
+  )}
+</Button>

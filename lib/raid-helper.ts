@@ -21,18 +21,21 @@ export interface RaidHelperEvent {
   }>
 }
 
-// Função para buscar eventos do Raid Helper
+// Função para buscar eventos do Raid Helper usando o ID do Discord
 export async function fetchRaidHelperEvents(apiKey = "") {
   try {
-    console.log("Buscando eventos do Raid Helper...")
+    console.log("Buscando eventos do Raid Helper usando ID do Discord...")
+    
+    // ID do Discord fornecido pelos fabricantes do Raid Helper
+    const DISCORD_ID = process.env.DISCORD_ID || "1313368815635009537"
     
     if (!apiKey) {
       console.error("Chave de API do Raid Helper não fornecida")
       throw new Error("Chave de API do Raid Helper não fornecida")
     }
 
-    // Endpoint para buscar eventos atuais
-    const response = await fetch("https://raid-helper.dev/api/v2/events/current", {
+    // Endpoint para buscar eventos por ID do Discord
+    const response = await fetch(`https://raid-helper.dev/api/v2/discord/${DISCORD_ID}/events`, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
