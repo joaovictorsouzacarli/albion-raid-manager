@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"  // Certifique-se de que esta importação existe
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CalendarDays, ChevronLeft, Users, Lock, LogOut, Moon, Sun, Plus, RefreshCw } from 'lucide-react'
 import { Input } from "@/components/ui/input"
@@ -305,7 +305,7 @@ export default function CallerPage({ params }: { params: { id: string } }) {
           ) : (
             <>
               <RefreshCw className="h-4 w-4 mr-1" />
-              Sincronizar Raids do Raid Helper
+              Sincronizar Raids do Discord
             </>
           )}
         </Button>
@@ -447,20 +447,3 @@ export default function CallerPage({ params }: { params: { id: string } }) {
     </main>
   )
 }
-<Button
-  onClick={syncRaids}
-  className="bg-[#0099cc] hover:bg-[#0077aa] dark:bg-blue-700 dark:hover:bg-blue-600"
-  disabled={syncLoading}
->
-  {syncLoading ? (
-    <>
-      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
-      Sincronizando...
-    </>
-  ) : (
-    <>
-      <RefreshCw className="h-4 w-4 mr-1" />
-      Sincronizar Raids do Discord
-    </>
-  )}
-</Button>
